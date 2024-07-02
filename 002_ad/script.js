@@ -7,7 +7,7 @@
 // ①まずははねを作ってみる
 // ・はねの形は？ => 台形 => どうやってつくる？ => サンプルコードをいただく
 // ②回転させてみる
-// ・はね1枚をまず、回転させてみる => JS => 一旦台形の中心を軸として回っている(groupにしても一緒)
+// ・はね1枚をまず、回転させてみる => JS => 一旦台形の中心を軸として回っている => 軸をずらす
 // ③はねを4枚作成する
 // ・どうやって？ => JS 1枚の羽を繰り返す => for文
 // ・順番は？ => groupとfor文どうやって組み合わせる？
@@ -166,7 +166,7 @@ class ThreeApp {
         new THREE.Vector3(-1.0, -1.0, 0.0),
         new THREE.Vector3(-0.5, 1.0, 0.0),
       ];
-      this.wingGeometry = new ConvexGeometry(points); // * pointsで台形座標を指定したものをConvexGeometryへ
+      this.wingGeometry = new ConvexGeometry(points); // * pointsで台形座標を指定したものをConvexGeometryへ      
 
       // 羽根のジオメトリから、メッシュを生成してシーンに追加 => メッシュ生成、group化してからシーンへ追加
       this.wingMesh = new THREE.Mesh(this.wingGeometry, this.material);
@@ -175,13 +175,19 @@ class ThreeApp {
         // * 4つのオブジェクトが取得できた{}
       // this.scene.add(this.wingMesh);
 
+      this.wingMesh.position.x = 2; // 台形の軸をずらす
+      this.wingMesh.rotation.z = (Math.PI / 2); //　(0, 0, 0)の方に台形の頭を向ける
+
       // * グループインスタンス
        // * for文で毎回this.groupを新しいTHREE.Groupインスタンスに置き換えているため、
        // * 最終的 this.groupは最後に作成されたwingMeshのグループのみを指すことになる。
        // * なので、for文の外で定義
       // this.group = new THREE.Group();
 
-      this.wingMesh.rotation.z = (Math.PI / 2) * i; // z軸で90度ずつ回転させる 180÷2=90度をかける4回
+      // 重なっている4枚のはねを90度ずつずらす
+      // this.wingMesh.rotation += (Math.PI / 2) * i; // z軸で90度ずつ回転させる 180÷2=90度をかける4回 ×
+      // this.wingMesh.position.set(Math.PI / 2, 2, 0) * i; ×
+      
 
       this.group.add(this.wingMesh); // * グループへ追加
     }
