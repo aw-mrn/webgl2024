@@ -147,26 +147,51 @@ class ThreeApp {
    */
   createMesh() { // * createMesh()関数
 
-    this.group = new THREE.Group();
+    // マテリアル
+    // * thisとは => const app = new ThreeApp(wrapper);
+    // * MATERIAL_PARAMでMeshPhongMaterialをインスタンス化し、this.materialへ
+    // * MeshPhongMaterial = 鏡面ハイライトのある光沢のある表面用のマテリアルのこと
+    this.material = new THREE.MeshPhongMaterial(ThreeApp.MATERIAL_PARAM);
+
+    // *　はねジオメトリ
+    // 羽根のジオメトリは、点を結んで ConvexGeometry で生成する
+    // ConvexGeometry を使うためには、OrbitControls と同じように別途 import が必要な点に注意
+    // * 台形の形になるように、０～３までの４つの座標を指定し、ジオメトリを作成する流れ
+    const points = [ // * 複数の頂点（点）をまとめて保持するために配列にする
+      new THREE.Vector3(0.5, 1.0, 0.0),
+      new THREE.Vector3(1.0, -1.0, 0.0),
+      new THREE.Vector3(-1.0, -1.0, 0.0),
+      new THREE.Vector3(-0.5, 1.0, 0.0),
+    ];
+    this.wingGeometry = new ConvexGeometry(points); // * pointsで台形座標を指定したものをConvexGeometryへ 
+
+    // * はねの中心の軸
+    this.wingCenter = new THREE.CylinderGeometry(1, 1, 0.5, 64);
+    this.wingCenterMesh = new THREE.Mesh(this.wingCenter, this.material);
+    this.wingCenterMesh.rotation.x = Math.PI / 2;
+
+    // * 羽の中心から伸びる棒
+    this.pole = new THREE.CylinderGeometry(0.4, 0.4, 2.5, 64);
+    this.poleMesh = new THREE.Mesh(this.pole, this.material);
+    this.poleMesh.rotation.x = Math.PI / 2;
+    this.poleMesh.position.z = -1.5;
+
+    // * あし
+    this.leg = new THREE.CylinderGeometry(0.3, 0.3, 4.5, 64);
+    this.legMesh = new THREE.Mesh(this.leg, this.material);
+    this.legMesh.position.y = -2
+
+    // * 台
+    this.stand = new THREE.CylinderGeometry(1, 2, 0.5, 10, 1);
+    this.standMesh = new THREE.Mesh(this.stand, this.material);
+    this.standMesh.position.y = -4
+    
+
+    this.group = new THREE.Group(); // * はね回転のgroup
+    this.ShaftGroup  = new THREE.Group(); // * 首振りのgroup
+    this.AllShaftGroup  = new THREE.Group(); // * 首振りのgroup
 
     for(let i = 0; i < 4; i++) { // * はねを4枚作る
-
-      // マテリアル
-      // * thisとは => const app = new ThreeApp(wrapper);
-      // * MATERIAL_PARAMでMeshPhongMaterialをインスタンス化し、this.materialへ
-      // * MeshPhongMaterial = 鏡面ハイライトのある光沢のある表面用のマテリアルのこと
-      this.material = new THREE.MeshPhongMaterial(ThreeApp.MATERIAL_PARAM);
-
-      // 羽根のジオメトリは、点を結んで ConvexGeometry で生成する
-      // ConvexGeometry を使うためには、OrbitControls と同じように別途 import が必要な点に注意
-      // * 台形の形になるように、０～３までの４つの座標を指定し、ジオメトリを作成する流れ
-      const points = [ // * 複数の頂点（点）をまとめて保持するために配列にする
-        new THREE.Vector3(0.5, 1.0, 0.0),
-        new THREE.Vector3(1.0, -1.0, 0.0),
-        new THREE.Vector3(-1.0, -1.0, 0.0),
-        new THREE.Vector3(-0.5, 1.0, 0.0),
-      ];
-      this.wingGeometry = new ConvexGeometry(points); // * pointsで台形座標を指定したものをConvexGeometryへ      
 
       // 羽根のジオメトリから、メッシュを生成してシーンに追加 => メッシュ生成、group化してからシーンへ追加
       this.wingMesh = new THREE.Mesh(this.wingGeometry, this.material);
@@ -175,8 +200,20 @@ class ThreeApp {
         // * 4つのオブジェクトが取得できた{}
       // this.scene.add(this.wingMesh);
 
-      this.wingMesh.position.x = 2; // 台形の軸をずらす
-      this.wingMesh.rotation.z = (Math.PI / 2); //　(0, 0, 0)の方に台形の頭を向ける
+      // * 位置の調整
+      if (i === 0) {
+        this.wingMesh.position.x = 1.5;
+        this.wingMesh.rotation.z = Math.PI / 2;
+      } else if (i === 1) {
+        this.wingMesh.position.y = 1.5;
+        this.wingMesh.rotation.z = Math.PI;
+      } else if (i === 2) {
+        this.wingMesh.position.x = -1.5;
+        this.wingMesh.rotation.z = -(Math.PI / 2);
+      } else if (i === 3) {
+        this.wingMesh.position.y = -1.5;
+        this.wingMesh.rotation.z = (Math.PI * 2);
+      }
 
       // * グループインスタンス
        // * for文で毎回this.groupを新しいTHREE.Groupインスタンスに置き換えているため、
@@ -184,16 +221,29 @@ class ThreeApp {
        // * なので、for文の外で定義
       // this.group = new THREE.Group();
 
-      // 重なっている4枚のはねを90度ずつずらす
-      // this.wingMesh.rotation += (Math.PI / 2) * i; // z軸で90度ずつ回転させる 180÷2=90度をかける4回 ×
-      // this.wingMesh.position.set(Math.PI / 2, 2, 0) * i; ×
-      
-
-      this.group.add(this.wingMesh); // * グループへ追加
+      // * グループへ追加(ここでグループに追加するのは、for文で4つ羽を作っているから)
+      this.group.add(this.wingMesh);
     }
     
+    // * グループへ追加
+    this.group.add(this.wingCenterMesh);
+    this.ShaftGroup.add(this.poleMesh);
+    this.ShaftGroup.add(this.group);
+    // * 首振りしたいもの全部を移動
+    this.ShaftGroup.position.z = 2;
+    // * 移動したものをさらにグループ追加
+    this.AllShaftGroup.add(this.ShaftGroup)
+
+    // * 軸を動かすには、移動して、groupに追加、そのグループを回す
+
     // シーンへ追加
-    this.scene.add(this.group);
+    // this.scene.add(this.group);
+    this.scene.add(this.AllShaftGroup);
+    this.scene.add(this.legMesh);
+    this.scene.add(this.standMesh);
+
+
+    this.rotationDirectionY = 1;
   }
 
   /**
@@ -221,6 +271,7 @@ class ThreeApp {
     }, false);
   }
 
+
   /**
    * 描画処理
    */
@@ -233,6 +284,22 @@ class ThreeApp {
 
     // はねの回転
     this.group.rotation.z += 0.05;
+
+    // 首振り
+    // 【やりたいこと】
+    // ①正面を向いた状態で、右に90度
+    // ②右に90度行ったら、戻ってくる
+    // ③戻ってきたら、次は左に90度
+    // ④左に90度行ったら、戻ってくる
+    // ⑤①に戻って繰り返す
+
+    if (this.AllShaftGroup.rotation.y > Math.PI / 3) {
+      this.rotationDirectionY = -1;
+    } else if (this.AllShaftGroup.rotation.y < -Math.PI / 3) {
+        this.rotationDirectionY = 1;
+    }
+    this.AllShaftGroup.rotation.y += 0.01 * this.rotationDirectionY;
+  
 
     // フラグに応じてオブジェクトの状態を変化させる
     if (this.isDown === true) {

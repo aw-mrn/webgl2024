@@ -168,6 +168,10 @@ class ThreeApp {
     );
     this.scene.add(this.ambientLight);
 
+    const axesBarLength = 5.0;
+    this.axesHelper = new THREE.AxesHelper(axesBarLength);
+    this.scene.add(this.axesHelper);
+
     // マテリアル side加えたので、それを忘れない
     this.material = new THREE.MeshPhongMaterial(ThreeApp.MATERIAL_PARAM, ThreeApp.MATERIAL_PARAM.side);
 
