@@ -14,7 +14,6 @@
 
 import * as THREE from '../lib/three.module.js';
 import { OrbitControls } from '../lib/OrbitControls.js';
-// import { Pane } from '../lib/tweakpane-4.0.3.min.js'; 
 
 window.addEventListener('DOMContentLoaded', async () => {
   const wrapper = document.querySelector('#webgl');
@@ -22,10 +21,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   await app.load();
   app.init();
   app.render();
-
-  // Tweakpane を使った GUI の設定
-  // const pane = new Pane();
-
 }, false);
 
 
@@ -101,6 +96,7 @@ class ThreeApp {
   ];
   imgDataList;      // imgList
 
+
   /**
    * コンストラクタ
    */
@@ -114,22 +110,21 @@ class ThreeApp {
     // Raycaster のインスタンスを生成する
     this.raycaster = new THREE.Raycaster();
     // マウスのクリックイベントの定義
-    window.addEventListener('mousemove', (mouseEvent) => { //mouseover
+    window.addEventListener('hover', (mouseEvent) => {
       // スクリーン空間の座標系をレイキャスター用に正規化する（-1.0 ~ 1.0 の範囲）
       const x = mouseEvent.clientX / window.innerWidth * 2.0 - 1.0;
       const y = mouseEvent.clientY / window.innerHeight * 2.0 - 1.0;
       // スクリーン空間は上下が反転している点に注意（Y だけ符号を反転させる）
       const v = new THREE.Vector2(x, -y);
-      // console.log(v);
       // レイキャスターに正規化済みマウス座標とカメラを指定する
       this.raycaster.setFromCamera(v, this.camera);
       // 計算に必要な要素を渡しただけで、計算自体はまだ行われていない
       // scene に含まれるすべてのオブジェクト（ここでは Mesh）を対象にレイキャストする
       // itersectObject(mesh)、intersectObjects(配列)
-      const intersects = this.raycaster.intersectObjects(this.planesArray);
-      // レイが交差しなかった場合を考慮し一度位置を通常時の状態にリセットしておく
-      this.planesArray.forEach((el) => {
-        el.position.z = 0;
+      const intersects = this.raycaster.intersectObject(this.torusArray);
+      // レイが交差しなかった場合を考慮し一度マテリアルを通常時の状態にリセットしておく
+      this.torusArray.forEach((mesh) => {
+        mesh.material = this.material;
       });
 
       // - intersectObjects でレイキャストした結果は配列 ----------------------
@@ -143,17 +138,9 @@ class ThreeApp {
       // 戻り値の中身は object というプロパティを経由することで対象の Mesh など
       // のオブジェクトを参照できる他、交点の座標などもわかります。
       // ----------------------------------------------------------------------
-      // if (intersects.length > 0) {
-      //   intersects[0].object.position.z = 0.3;
-      // }
       if (intersects.length > 0) {
-        const intersectsObject = intersects[0].object;
-        const direction = intersectsObject.position.clone(); // クローンしないほうがいい？
-        // 長さを考えず向きだけを考えたいので、ベクトルを単位化する
-        const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
-        intersectsObject.position.add(vDirection.multiplyScalar(0.2));
-        // 0.3は単体の数値 = スカラー 
-        // スカラーをベクトルに対して掛け算したい
+        // [0]としているのは手前にあるやつを判定させるため
+        intersects[0].object.material = this.hitMaterial;
       }
       // - Raycaster は CPU 上で動作する --------------------------------------
       // WebGL は描画処理に GPU を活用することで高速に動作します。
@@ -302,7 +289,6 @@ class ThreeApp {
     // テクスチャを設定したマテリアルを作成
     const numPlanes = 20;
     const radius = 3.0; // 円の半径
-    this.planesArray = []; // raycasterに入れるため
 
     for(let i = 0; i < numPlanes; i++){
       const angle = i * (2 * Math.PI / numPlanes); // 各ポリゴンの場所決め
@@ -317,17 +303,16 @@ class ThreeApp {
         side: THREE.DoubleSide
       });
 
-      this.plane = new THREE.Mesh(planeGeometry, planeMaterial);
-      this.plane.position.set(x, y, 0); // 計算した座標にポリゴンを配置
-      this.plane.rotation.x = Math.PI / 2;
-      this.plane.rotation.y = angle;
+      const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+      plane.position.set(x, y, 0); // 計算した座標にポリゴンを配置
+      plane.rotation.x = Math.PI / 2;
+      plane.rotation.y = angle;
 
-      this.group.add(this.plane);
-      this.planesArray.push(this.plane); // raycasterに入れるため
+      this.group.add(plane);
 
       // planeは真横から見ると厚みがないので見えなくなる → それを防ぐために一度傾きをかけておく
       // this.group.rotation.x = -0.25;
-      // ↓ 調整で
+      // ↓ 微調整で
       // this.group.rotation.x = -300;
       // ↑回転デカすぎて制御できていない感じ
       // 回転はラジアンで考えるので、度数法の 360 度に相当する値は２パイ（約 6.28）
