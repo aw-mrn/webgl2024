@@ -113,8 +113,12 @@ class ThreeApp {
 
     // Raycaster のインスタンスを生成する
     this.raycaster = new THREE.Raycaster();
-    // マウスのクリックイベントの定義
+    
+    let flag = false;
+
+    // マウスのホバーイベントの定義
     window.addEventListener('mousemove', (mouseEvent) => { //mouseover
+
       // スクリーン空間の座標系をレイキャスター用に正規化する（-1.0 ~ 1.0 の範囲）
       const x = mouseEvent.clientX / window.innerWidth * 2.0 - 1.0;
       const y = mouseEvent.clientY / window.innerHeight * 2.0 - 1.0;
@@ -128,8 +132,9 @@ class ThreeApp {
       // itersectObject(mesh)、intersectObjects(配列)
       const intersects = this.raycaster.intersectObjects(this.planesArray);
       // レイが交差しなかった場合を考慮し一度位置を通常時の状態にリセットしておく
-      this.planesArray.forEach((el) => {
-        el.position.z = 0;
+      this.planesArray.forEach((plane) => {
+        // リセットの状態を書く
+        // plane.flag = false;
       });
 
       // - intersectObjects でレイキャストした結果は配列 ----------------------
@@ -143,18 +148,53 @@ class ThreeApp {
       // 戻り値の中身は object というプロパティを経由することで対象の Mesh など
       // のオブジェクトを参照できる他、交点の座標などもわかります。
       // ----------------------------------------------------------------------
-      // if (intersects.length > 0) {
-      //   intersects[0].object.position.z = 0.3;
+      // let flag = false;
+      // if (flag === true) {
+      //   // フラグがすでに立っている場合なにもしない
+      //   return;
+      // } else {
+      //   flag = true;
+      //   // 一度しかしない処理
       // }
-      if (intersects.length > 0) {
+      if (intersects.length > 0) { 
+        if (flag === true) {
+          // フラグがすでに立っている場合なにもしない
+          return;
+        } else {
+          const intersectsObject = intersects[0].object;
+          console.log(intersectsObject);
+          const direction = intersectsObject.position.clone();
+          const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
+          intersectsObject.position.add(vDirection.multiplyScalar(0.2));
+          flag = true;
+        }
+      } else { // intersects.length === 0
         const intersectsObject = intersects[0].object;
-        const direction = intersectsObject.position.clone(); // クローンしないほうがいい？
-        // 長さを考えず向きだけを考えたいので、ベクトルを単位化する
+        console.log(intersectsObject);
+        const direction = intersectsObject.position.clone();
         const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
-        intersectsObject.position.add(vDirection.multiplyScalar(0.2));
-        // 0.3は単体の数値 = スカラー 
-        // スカラーをベクトルに対して掛け算したい
+        intersectsObject.position.sub(vDirection.multiplyScalar(0.2));
+        flag = false;
       }
+      // 元々の記述(復元用)
+      // if (intersects.length > 0) { // ぶつかったオブジェクトに対しての処理
+      //   const intersectsObject = intersects[0].object;
+
+      //   const direction = intersectsObject.position.clone(); // ここの部分↓のように考えられる
+      //   // 今回は、グループの中心がワールド空間の原点と重なっている状態
+      //   // ベクトルを定義するときの式「終点 ー 視点」ということを考えたときには、
+      //   // 仮に終点、つまり Plane が置かれているワールド座標へと伸びるベクトルは以下のように求められる
+      //   // const origin = new Vector3(0.0, 0.0, 0.0); // 原点
+      //   // const planePosition = Plane.position.clone();
+      //   // const toPlaneVector = new Vector3().subVectors(planePosition, origin); // 原点から Plane へと伸びるベクトル
+      //   // toPlaneVector.normalize()
+      //   // 長さを考えず向きだけを考えたいので、ベクトルを単位化する
+
+      //   const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
+      //   intersectsObject.position.add(vDirection.multiplyScalar(0.2));
+      //   // 0.2は単体の数値 = スカラー 
+      //   // スカラーをベクトルに対して掛け算したい
+      // }
       // - Raycaster は CPU 上で動作する --------------------------------------
       // WebGL は描画処理に GPU を活用することで高速に動作します。
       // しかし JavaScript は CPU 上で動作するプログラムであり、Raycaster が内部
@@ -323,7 +363,9 @@ class ThreeApp {
       this.plane.rotation.y = angle;
 
       this.group.add(this.plane);
+      // console.log(this.plane);
       this.planesArray.push(this.plane); // raycasterに入れるため
+      // console.log(this.planesArray);
 
       // planeは真横から見ると厚みがないので見えなくなる → それを防ぐために一度傾きをかけておく
       // this.group.rotation.x = -0.25;
