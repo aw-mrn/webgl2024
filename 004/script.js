@@ -133,10 +133,15 @@ class ThreeApp {
       const intersects = this.raycaster.intersectObjects(this.planesArray);
       // レイが交差しなかった場合を考慮し一度位置を通常時の状態にリセットしておく
       this.planesArray.forEach((plane) => {
-        // リセットの状態を書く
-        // plane.flag = false;
+        // 初期位置を保存
+        // console.log(plane);
+        // plane.defaultPos = plane.position.clone(); これだとうまくいかない
+        // console.log(plane.defaultPos); // 値が更新され続ける
+        // もし、planeが何にも当たっていなかったら
+        if (!plane.defaultPos) {
+          plane.defaultPos = plane.position.clone();
+        }
       });
-
       // - intersectObjects でレイキャストした結果は配列 ----------------------
       // 名前が似ているので紛らわしいのですが Raycaster には intersectObject と
       // intersectObjects があります。複数形の s がついているかどうかの違いがあ
@@ -162,18 +167,17 @@ class ThreeApp {
           return;
         } else {
           const intersectsObject = intersects[0].object;
-          console.log(intersectsObject);
+          // console.log(intersectsObject);
           const direction = intersectsObject.position.clone();
           const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
           intersectsObject.position.add(vDirection.multiplyScalar(0.2));
           flag = true;
         }
       } else { // intersects.length === 0
-        const intersectsObject = intersects[0].object;
-        console.log(intersectsObject);
-        const direction = intersectsObject.position.clone();
-        const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
-        intersectsObject.position.sub(vDirection.multiplyScalar(0.2));
+        this.planesArray.forEach((plane) => { // 各planeを見る = intersects[0]と同じようにしている
+          // 位置を元に戻す
+          plane.position.copy(plane.defaultPos);
+        });
         flag = false;
       }
       // 元々の記述(復元用)
