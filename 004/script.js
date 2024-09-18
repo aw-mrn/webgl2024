@@ -9,11 +9,16 @@
 // ・円状に並べたPlane（板）に画像を貼り付ける
 // ・Raycasterでマウスが各々の画像に交差する時を判定
 // → 交差したら、planeをずらす
-// 
+
+// 【残りやりたいこと】
+// ※「いずれかの Plane のどれかと交差しているか」だけを条件にしてすべての処理を行っている場合、A という Plane と B という Plane が
+// スクリーン空間で重なって見えている場合に、A からカーソルは外れたけど B にそのまま重なってしまった、という状況で破綻する可能性がある
+// ・クリックしながらthis.groupを動かすとくるくる回る
+// ・中心に最初はタイトルが出ている。
 // ============================================================================
 
 import * as THREE from '../lib/three.module.js';
-import { OrbitControls } from '../lib/OrbitControls.js';
+// import { OrbitControls } from '../lib/OrbitControls.js';
 // import { Pane } from '../lib/tweakpane-4.0.3.min.js'; 
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -76,6 +81,7 @@ class ThreeApp {
   axesHelper;       // 軸ヘルパー
 
   group;            // 20枚のplaneのグループ化
+  parentGroup;      // 20枚のplaneのグループ化した親のグループ
   plane;            // 板ポリゴン
   imgList = [
     "img/img01.png",
@@ -100,6 +106,12 @@ class ThreeApp {
     "img/img20.png",
   ];
   imgDataList;      // imgList
+  isRotating;       // マウスの動きに応じて回転するフラグ
+  targetRotation;   // マウスイベント(pointer Down/UP で回転)
+  targetRotationOnPointerDown;
+  pointerX;
+  pointerXOnPointerDown;
+  windowHalfX;
 
   /**
    * コンストラクタ
@@ -109,12 +121,13 @@ class ThreeApp {
     this.wrapper = wrapper;
 
     // this のバインド
-    this.render = this.render.bind(this);
+    this.render = this.render.bind(this); // bindを使ってthisを明示的に設定する
 
     // Raycaster のインスタンスを生成する
     this.raycaster = new THREE.Raycaster();
     
-    let flag = false;
+    let flag = false; // plane移動のフラグ
+    this.isLean = true; // マウスの動きに応じて傾くフラグ
 
     // マウスのホバーイベントの定義
     window.addEventListener('mousemove', (mouseEvent) => { //mouseover
@@ -122,9 +135,22 @@ class ThreeApp {
       // スクリーン空間の座標系をレイキャスター用に正規化する（-1.0 ~ 1.0 の範囲）
       const x = mouseEvent.clientX / window.innerWidth * 2.0 - 1.0;
       const y = mouseEvent.clientY / window.innerHeight * 2.0 - 1.0;
-      // スクリーン空間は上下が反転している点に注意（Y だけ符号を反転させる）
+      // 単位化 スクリーン空間は上下が反転している点に注意（Y だけ符号を反転させる）
       const v = new THREE.Vector2(x, -y);
       // console.log(v);
+
+      // planeのグループ(this.parentGroup)をマウスの動きに合わせて傾ける
+      // どう考える？ ↓
+      // カーソルを水平に動かしているとき、つまりカーソルの X 座標が変化しているとき、それに連動して Group はどういうふうに動いているか
+      // 首を横にふるような動きなのか、首を縦に振るうなずくような動きなのか。
+      // もし、首を左右に振るような、日本人的には拒絶を表すときの首振りの動きだとすると、それは Group に対する Y 軸回転。（扇風機の課題のときを思い出して！）
+      // もし首を上下に振るような、日本人的には同意などを表すときの首振りの動きだとすると、それは X 軸回転。
+      // このように、カーソルがスクリーン空間上で X / Y のそれぞれが変化するとき、Group の何軸が連動して回転すればよいのかを、各要素ごとに切り離して、それぞれ区別して考えてみることが大事
+      if (this.isLean) {
+        this.parentGroup.rotation.y = x * 0.5; // 回転角度を小さくするために0.5を掛ける
+        this.parentGroup.rotation.x = y * 0.2;
+      }
+
       // レイキャスターに正規化済みマウス座標とカメラを指定する
       this.raycaster.setFromCamera(v, this.camera);
       // 計算に必要な要素を渡しただけで、計算自体はまだ行われていない
@@ -133,10 +159,6 @@ class ThreeApp {
       const intersects = this.raycaster.intersectObjects(this.planesArray);
       // レイが交差しなかった場合を考慮し一度位置を通常時の状態にリセットしておく
       this.planesArray.forEach((plane) => {
-        // 初期位置を保存
-        // console.log(plane);
-        // plane.defaultPos = plane.position.clone(); これだとうまくいかない
-        // console.log(plane.defaultPos); // 値が更新され続ける
         // もし、planeが何にも当たっていなかったら
         if (!plane.defaultPos) {
           plane.defaultPos = plane.position.clone();
@@ -153,15 +175,7 @@ class ThreeApp {
       // 戻り値の中身は object というプロパティを経由することで対象の Mesh など
       // のオブジェクトを参照できる他、交点の座標などもわかります。
       // ----------------------------------------------------------------------
-      // let flag = false;
-      // if (flag === true) {
-      //   // フラグがすでに立っている場合なにもしない
-      //   return;
-      // } else {
-      //   flag = true;
-      //   // 一度しかしない処理
-      // }
-      if (intersects.length > 0) { 
+      if (intersects.length > 0) { // ぶつかったオブジェクトに対しての処理
         if (flag === true) {
           // フラグがすでに立っている場合なにもしない
           return;
@@ -172,15 +186,27 @@ class ThreeApp {
           const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
           intersectsObject.position.add(vDirection.multiplyScalar(0.2));
           flag = true;
+
+          // ホバー時
+          const planeId = intersectsObject.userData.id; // userDataからIDを取得する
+          const hov_item = document.getElementById(planeId);
+          if(hov_item) {
+            hov_item.style.display = 'block';
+          }
         }
       } else { // intersects.length === 0
         this.planesArray.forEach((plane) => { // 各planeを見る = intersects[0]と同じようにしている
           // 位置を元に戻す
           plane.position.copy(plane.defaultPos);
         });
+        // ホバー外れた時
+        document.querySelectorAll('.hov_cont').forEach(item => {
+          item.style.display = 'none';
+        });
         flag = false;
       }
-      // 元々の記述(復元用)
+
+      // 元々の記述(勉強用)
       // if (intersects.length > 0) { // ぶつかったオブジェクトに対しての処理
       //   const intersectsObject = intersects[0].object;
 
@@ -208,6 +234,55 @@ class ThreeApp {
       // 増えると、それに比例して Raycaster のコストも増加します。
       // ----------------------------------------------------------------------
     }, false);
+
+
+    // マウスイベント(pointer Down/UP で回転)
+    this.wrapper.addEventListener('pointerdown', (event) => onPointerDown(event));
+
+    this.targetRotation = 0; // オブジェクトに適用される最終的な回転の値を保持する
+    this.targetRotationOnPointerDown = 0; // ポインターが押された時の初期回転値を保存する
+
+    this.pointerX = 0; // 現在のポインターの横方向の位置を保持
+    this.pointerXOnPointerDown = 0; // ポインターが押された時の横方向の位置を保存
+
+    this.windowHalfX = window.innerWidth / 2; // ウィンドウの中心
+
+    const onPointerDown = (event) => { // ポインターが押された時
+      if (event.isPrimary === false) return; // メインポインター操作のみを対象にするため。isPrimary
+
+      this.isLean = false; 
+    
+      this.pointerXOnPointerDown = event.clientX - this.windowHalfX; // ポインターが押された瞬間の位置を保存
+      this.targetRotationOnPointerDown = this.targetRotation; // ポインターが押された瞬間のオブジェクトの回転を保存
+    
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup', onPointerUp);
+      // ポインターが動いた時、指を離した時のイベントリスナーを追加して、ポインターの動きに応じた回転制御をする
+    }
+    
+    const onPointerMove = (event) => { // ポインターが移動した時
+      if (event.isPrimary === false) return;
+
+      this.isLean = false; 
+
+      this.pointerX = event.clientX - this.windowHalfX; // ポインターの現在の位置を計算
+
+      this.targetRotation = this.targetRotationOnPointerDown + ( this.pointerX - this.pointerXOnPointerDown ) * 0.02; // ポインターが押された時の回転角にポインターの移動量に比例した回転量を加えたもの。??ちょっとよくわからない
+    }
+    
+    const onPointerUp = (event) => { // ポインターが離された時
+      if (event.isPrimary === false) return;
+
+      this.isLean = true; 
+    
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      // ポインターの操作が終了した時点で、イベントリスナーを削除する
+    }
+
+
+
+
 
     // ウィンドウのリサイズを検出できるようにする
     window.addEventListener('resize', () => {
@@ -243,22 +318,6 @@ class ThreeApp {
       )
     );
   }
-  // load() {
-  //   return new Promise((resolve) => {
-  //     const earthPath = './earth.jpg';
-  //     const moonPath = './moon.jpg';
-  //     const loader = new THREE.TextureLoader();
-  //     loader.load(earthPath, (earthTexture) => {
-  //       // 地球用
-  //       this.earthTexture = earthTexture;
-  //       loader.load(moonPath, (moonTexture) => {
-  //         // 月用
-  //         this.moonTexture = moonTexture;
-  //         resolve();
-  //       });
-  //     });
-  //   });
-  // }
 
 
   /**
@@ -319,7 +378,7 @@ class ThreeApp {
      * ズーム: マウスホイール
      * パン: 右ボタンでドラッグ
      */
-     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    //  this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
     /**
      * 軸ヘルパー
@@ -334,6 +393,7 @@ class ThreeApp {
      */
 
     this.group = new THREE.Group(); // 板ポリ全体をグループ化するため
+    this.parentGroup = new THREE.Group(); // groupを包むgroup = マウスで傾きをつける groupはxで回転がかかっているので区別する
 
     const planeGeometry = new THREE.PlaneGeometry(0.40, 0.30);
     // const planeMaterial = new THREE.MeshBasicMaterial({color: 0x000000});
@@ -365,6 +425,7 @@ class ThreeApp {
       this.plane.position.set(x, y, 0); // 計算した座標にポリゴンを配置
       this.plane.rotation.x = Math.PI / 2;
       this.plane.rotation.y = angle;
+      this.plane.userData.id = `hov_cont${i + 1}`;  // userDataにIDを設定
 
       this.group.add(this.plane);
       // console.log(this.plane);
@@ -379,17 +440,20 @@ class ThreeApp {
       // 回転はラジアンで考えるので、度数法の 360 度に相当する値は２パイ（約 6.28）
       this.group.rotation.x = Math.PI / 2 + 10;
       this.group.rotation.z = 15; // 少しずらすことでplaneが全て見えるようにする
-
       this.scene.add(this.group);
+
+      this.parentGroup.add(this.group);
+      this.scene.add(this.parentGroup);
     }
-
   }
-
 
   /**
    * 描画処理
    */
   render() {
+
+    // グループの回転を適用
+    this.parentGroup.rotation.y += (this.targetRotation - this.parentGroup.rotation.y) * 0.05;
 
     // 恒常ループ
     requestAnimationFrame(this.render);
