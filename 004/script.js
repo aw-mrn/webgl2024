@@ -106,12 +106,10 @@ class ThreeApp {
     "img/img20.png",
   ];
   imgDataList;      // imgList
-  isRotating;       // マウスの動きに応じて回転するフラグ
-  targetRotation;   // マウスイベント(pointer Down/UP で回転)
-  targetRotationOnPointerDown;
-  pointerX;
-  pointerXOnPointerDown;
+  // マウスイベント(pointer Down/UP で回転)
+  pointerStartX;
   windowHalfX;
+
 
   /**
    * コンストラクタ
@@ -127,7 +125,7 @@ class ThreeApp {
     this.raycaster = new THREE.Raycaster();
     
     let flag = false; // plane移動のフラグ
-    this.isLean = true; // マウスの動きに応じて傾くフラグ
+    // this.isLean = true; // マウスの動きに応じて傾くフラグ
 
     // マウスのホバーイベントの定義
     window.addEventListener('mousemove', (mouseEvent) => { //mouseover
@@ -146,10 +144,12 @@ class ThreeApp {
       // もし、首を左右に振るような、日本人的には拒絶を表すときの首振りの動きだとすると、それは Group に対する Y 軸回転。（扇風機の課題のときを思い出して！）
       // もし首を上下に振るような、日本人的には同意などを表すときの首振りの動きだとすると、それは X 軸回転。
       // このように、カーソルがスクリーン空間上で X / Y のそれぞれが変化するとき、Group の何軸が連動して回転すればよいのかを、各要素ごとに切り離して、それぞれ区別して考えてみることが大事
-      if (this.isLean) {
-        this.parentGroup.rotation.y = x * 0.5; // 回転角度を小さくするために0.5を掛ける
-        this.parentGroup.rotation.x = y * 0.2;
-      }
+      // if (this.isLean) {
+      //   this.parentGroup.rotation.y = x * 0.5; // 回転角度を小さくするために0.5を掛ける
+      //   this.parentGroup.rotation.x = y * 0.2;
+      // }
+      this.parentGroup.rotation.y = x * 0.5; // 回転角度を小さくするために0.5を掛ける
+      this.parentGroup.rotation.x = y * 0.2;
 
       // レイキャスターに正規化済みマウス座標とカメラを指定する
       this.raycaster.setFromCamera(v, this.camera);
@@ -234,55 +234,6 @@ class ThreeApp {
       // 増えると、それに比例して Raycaster のコストも増加します。
       // ----------------------------------------------------------------------
     }, false);
-
-
-    // マウスイベント(pointer Down/UP で回転)
-    this.wrapper.addEventListener('pointerdown', (event) => onPointerDown(event));
-
-    this.targetRotation = 0; // オブジェクトに適用される最終的な回転の値を保持する
-    this.targetRotationOnPointerDown = 0; // ポインターが押された時の初期回転値を保存する
-
-    this.pointerX = 0; // 現在のポインターの横方向の位置を保持
-    this.pointerXOnPointerDown = 0; // ポインターが押された時の横方向の位置を保存
-
-    this.windowHalfX = window.innerWidth / 2; // ウィンドウの中心
-
-    const onPointerDown = (event) => { // ポインターが押された時
-      if (event.isPrimary === false) return; // メインポインター操作のみを対象にするため。isPrimary
-
-      this.isLean = false; 
-    
-      this.pointerXOnPointerDown = event.clientX - this.windowHalfX; // ポインターが押された瞬間の位置を保存
-      this.targetRotationOnPointerDown = this.targetRotation; // ポインターが押された瞬間のオブジェクトの回転を保存
-    
-      document.addEventListener('pointermove', onPointerMove);
-      document.addEventListener('pointerup', onPointerUp);
-      // ポインターが動いた時、指を離した時のイベントリスナーを追加して、ポインターの動きに応じた回転制御をする
-    }
-    
-    const onPointerMove = (event) => { // ポインターが移動した時
-      if (event.isPrimary === false) return;
-
-      this.isLean = false; 
-
-      this.pointerX = event.clientX - this.windowHalfX; // ポインターの現在の位置を計算
-
-      this.targetRotation = this.targetRotationOnPointerDown + ( this.pointerX - this.pointerXOnPointerDown ) * 0.02; // ポインターが押された時の回転角にポインターの移動量に比例した回転量を加えたもの。??ちょっとよくわからない
-    }
-    
-    const onPointerUp = (event) => { // ポインターが離された時
-      if (event.isPrimary === false) return;
-
-      this.isLean = true; 
-    
-      document.removeEventListener('pointermove', onPointerMove);
-      document.removeEventListener('pointerup', onPointerUp);
-      // ポインターの操作が終了した時点で、イベントリスナーを削除する
-    }
-
-
-
-
 
     // ウィンドウのリサイズを検出できるようにする
     window.addEventListener('resize', () => {
@@ -445,15 +396,54 @@ class ThreeApp {
       this.parentGroup.add(this.group);
       this.scene.add(this.parentGroup);
     }
+
+
+    // マウスイベントで回転
+    let mouseDownFlag = false; // マウスボタンが up or downのフラグ
+    this.pointerStartX = 0;
+    this.windowHalfX = window.innerWidth / 2; // ウィンドウの中心
+
+    this.wrapper.addEventListener('mousedown', (event) => { // マウスボタンが押された時
+
+      mouseDownFlag = true;
+
+      // マウスボタンが押された瞬間（mousedown）に、その時のカーソルの位置を変数に保持するようにする
+      this.pointerStartX = event.clientX - this.windowHalfX; // ポインターが押された瞬間の位置を保存
+
+
+    });
+
+    this.wrapper.addEventListener('mouseup', () => { // マウスボタンが離された時
+
+      mouseDownFlag = false;
+
+    });
+
+    this.wrapper.addEventListener('mousemove', (event) => { // マウスが動いた時
+
+      // まずフラグが立っているかを見る（false なら即 return する）
+      if(mouseDownFlag === false) return;
+
+      if(mouseDownFlag === true) {
+        // mousemove + フラグが立っている（ボタンが押下されている）場合は
+        // mousedown時で保持したカーソルの位置と、いまこの瞬間のカーソルの位置を比較することで、カーソルがどう動いたかを知ることができる
+        this.pointerCurrentX = event.clientX - this.windowHalfX; // ポインターの現在の位置を計算
+        this.pointerDiffX = this.pointerCurrentX - this.pointerStartX; // X軸の移動量
+        
+        // カーソルがどう動いたかを計算したら、また「その瞬間のカーソルの位置」は変数に保持しておく
+        this.pointerStartX = this.pointerCurrentX; // ???
+
+        // 横方向の移動量を回転量に変換
+        this.group.rotation.z += this.pointerDiffX;
+
+      }
+    });
   }
 
   /**
    * 描画処理
    */
   render() {
-
-    // グループの回転を適用
-    this.parentGroup.rotation.y += (this.targetRotation - this.parentGroup.rotation.y) * 0.05;
 
     // 恒常ループ
     requestAnimationFrame(this.render);
