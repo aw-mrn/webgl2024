@@ -1,19 +1,8 @@
 // ============================================================================
 // 課題：Raycaster と Plane（板）を使ってなにか作ってみる
-
-// 【手順】
-// ・Plane（板）を円状に並べる
-// → planeをまず表示
-//   for文で表示
-// ・円状に並べたものを、グループにして見える位置をかえる
-// ・円状に並べたPlane（板）に画像を貼り付ける
-// ・Raycasterでマウスが各々の画像に交差する時を判定
-// → 交差したら、planeをずらす
-
 // 【残りやりたいこと】
 // ※「いずれかの Plane のどれかと交差しているか」だけを条件にしてすべての処理を行っている場合、A という Plane と B という Plane が
 // スクリーン空間で重なって見えている場合に、A からカーソルは外れたけど B にそのまま重なってしまった、という状況で破綻する可能性がある
-// ・クリックしながらthis.groupを動かすとくるくる回る
 // ・中心に最初はタイトルが出ている。
 // ============================================================================
 
@@ -163,6 +152,7 @@ class ThreeApp {
         if (!plane.defaultPos) {
           plane.defaultPos = plane.position.clone();
         }
+        plane.isMoved = false; // 移動済みかを管理
       });
       // - intersectObjects でレイキャストした結果は配列 ----------------------
       // 名前が似ているので紛らわしいのですが Raycaster には intersectObject と
@@ -186,6 +176,7 @@ class ThreeApp {
           const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
           intersectsObject.position.add(vDirection.multiplyScalar(0.2));
           flag = true;
+          intersectsObject.isMoved = true; // フラグを立てて移動を1回だけにしたい
 
           // ホバー時
           const planeId = intersectsObject.userData.id; // userDataからIDを取得する
@@ -198,6 +189,7 @@ class ThreeApp {
         this.planesArray.forEach((plane) => { // 各planeを見る = intersects[0]と同じようにしている
           // 位置を元に戻す
           plane.position.copy(plane.defaultPos);
+          plane.isMoved = false; // フラグもリセット
         });
         // ホバー外れた時
         document.querySelectorAll('.hov_cont').forEach(item => {
@@ -431,11 +423,10 @@ class ThreeApp {
         this.pointerDiffX = this.pointerCurrentX - this.pointerStartX; // X軸の移動量
         
         // カーソルがどう動いたかを計算したら、また「その瞬間のカーソルの位置」は変数に保持しておく
-        this.pointerStartX = this.pointerCurrentX; // ???
+        this.pointerStartX = this.pointerCurrentX;
 
         // 横方向の移動量を回転量に変換
-        this.group.rotation.z += this.pointerDiffX;
-
+        this.group.rotation.z += this.pointerDiffX * 0.01;
       }
     });
   }
