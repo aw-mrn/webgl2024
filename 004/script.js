@@ -1,11 +1,6 @@
-// ============================================================================
+// ================================================
 // 課題：Raycaster と Plane（板）を使ってなにか作ってみる
-// 【残りやりたいこと】
-// ※「いずれかの Plane のどれかと交差しているか」だけを条件にしてすべての処理を行っている場合、A という Plane と B という Plane が
-// スクリーン空間で重なって見えている場合に、A からカーソルは外れたけど B にそのまま重なってしまった、という状況で破綻する可能性がある
-// ・中心に最初はタイトルが出ている。
-// ============================================================================
-
+// ================================================
 import * as THREE from '../lib/three.module.js';
 // import { OrbitControls } from '../lib/OrbitControls.js';
 // import { Pane } from '../lib/tweakpane-4.0.3.min.js'; 
@@ -95,9 +90,18 @@ class ThreeApp {
     "img/img20.png",
   ];
   imgDataList;      // imgList
+  // ホバー時反応用のplane
+  hoverPlaneGroup;
+  hoverParentGroup;
+  hoverPlanesArray;
+  hoverPlane;
+  hoverPlaneGroup;
+  hoverParentGroup;
   // マウスイベント(pointer Down/UP で回転)
   pointerStartX;
   windowHalfX;
+  pointerCurrentX;
+  pointerDiffX;
 
 
   /**
@@ -114,7 +118,6 @@ class ThreeApp {
     this.raycaster = new THREE.Raycaster();
     
     let flag = false; // plane移動のフラグ
-    // this.isLean = true; // マウスの動きに応じて傾くフラグ
 
     // マウスのホバーイベントの定義
     window.addEventListener('mousemove', (mouseEvent) => { //mouseover
@@ -137,8 +140,13 @@ class ThreeApp {
       //   this.parentGroup.rotation.y = x * 0.5; // 回転角度を小さくするために0.5を掛ける
       //   this.parentGroup.rotation.x = y * 0.2;
       // }
+
+      // 画像plane用
       this.parentGroup.rotation.y = x * 0.5; // 回転角度を小さくするために0.5を掛ける
       this.parentGroup.rotation.x = y * 0.2;
+      // hoverplane用
+      this.hoverParentGroup.rotation.y = x * 0.5;
+      this.hoverParentGroup.rotation.x = y * 0.2;
 
       // レイキャスターに正規化済みマウス座標とカメラを指定する
       this.raycaster.setFromCamera(v, this.camera);
@@ -146,13 +154,13 @@ class ThreeApp {
       // scene に含まれるすべてのオブジェクト（ここでは Mesh）を対象にレイキャストする
       // itersectObject(mesh)、intersectObjects(配列)
       const intersects = this.raycaster.intersectObjects(this.planesArray);
+      const intersectsHover = this.raycaster.intersectObjects(this.hoverPlanesArray);
       // レイが交差しなかった場合を考慮し一度位置を通常時の状態にリセットしておく
       this.planesArray.forEach((plane) => {
         // もし、planeが何にも当たっていなかったら
         if (!plane.defaultPos) {
           plane.defaultPos = plane.position.clone();
         }
-        plane.isMoved = false; // 移動済みかを管理
       });
       // - intersectObjects でレイキャストした結果は配列 ----------------------
       // 名前が似ているので紛らわしいのですが Raycaster には intersectObject と
@@ -165,38 +173,83 @@ class ThreeApp {
       // 戻り値の中身は object というプロパティを経由することで対象の Mesh など
       // のオブジェクトを参照できる他、交点の座標などもわかります。
       // ----------------------------------------------------------------------
-      if (intersects.length > 0) { // ぶつかったオブジェクトに対しての処理
+      // if(intersectsHover.length > 0) {
+      //   console.log('hover！');
+      // sceneにaddしないと反応しない
+      // }
+      
+      if (intersectsHover.length > 0) {
         if (flag === true) {
-          // フラグがすでに立っている場合なにもしない
+          // フラグがすでに立っている場合は何もしない
           return;
         } else {
           const intersectsObject = intersects[0].object;
-          // console.log(intersectsObject);
-          const direction = intersectsObject.position.clone();
-          const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
-          intersectsObject.position.add(vDirection.multiplyScalar(0.2));
-          flag = true;
-          intersectsObject.isMoved = true; // フラグを立てて移動を1回だけにしたい
-
-          // ホバー時
-          const planeId = intersectsObject.userData.id; // userDataからIDを取得する
-          const hov_item = document.getElementById(planeId);
-          if(hov_item) {
-            hov_item.style.display = 'block';
+          
+          // フラグが立っていない場合にだけホバー処理を行う
+          if (!intersectsObject.userData.isHovered) {
+            intersectsObject.userData.isHovered = true;
+            
+            // 位置移動
+            const direction = intersectsObject.position.clone();
+            const vDirection = direction.normalize();
+            intersectsObject.position.add(vDirection.multiplyScalar(0.2));
+            flag = true;
+    
+            // ホバー時に中央表示
+            const planeId = intersectsObject.userData.id; // userDataからIDを取得
+            const hov_item = document.getElementById(planeId);
+            if (hov_item) {
+              hov_item.style.display = 'block';
+            }
           }
         }
-      } else { // intersects.length === 0
-        this.planesArray.forEach((plane) => { // 各planeを見る = intersects[0]と同じようにしている
-          // 位置を元に戻す
-          plane.position.copy(plane.defaultPos);
-          plane.isMoved = false; // フラグもリセット
+      } else { 
+        // ホバー外れた時の処理
+        this.planesArray.forEach((plane) => {
+          if (plane.userData.isHovered) {
+            plane.position.copy(plane.defaultPos); // 元の位置に戻す
+            plane.userData.isHovered = false; // ホバー状態を解除
+          }
         });
-        // ホバー外れた時
+    
+        // ホバー時に中央非表示
         document.querySelectorAll('.hov_cont').forEach(item => {
           item.style.display = 'none';
         });
+    
         flag = false;
       }
+
+      // if (intersectsHover.length > 0) { // ぶつかったオブジェクトに対しての処理
+      //   if (flag === true) {
+      //     // フラグがすでに立っている場合なにもしない
+      //     return;
+      //   } else {
+      //     const intersectsObject = intersects[0].object;
+      //     // console.log(intersectsObject);
+      //     const direction = intersectsObject.position.clone();
+      //     const vDirection = direction.normalize(); // vDirection = 長さが1の状態になる
+      //     intersectsObject.position.add(vDirection.multiplyScalar(0.2));
+      //     flag = true;
+
+      //     // ホバー時に中央表示
+      //     const planeId = intersectsObject.userData.id; // userDataからIDを取得する
+      //     const hov_item = document.getElementById(planeId);
+      //     if(hov_item) {
+      //       hov_item.style.display = 'block';
+      //     }
+      //   }
+      // } else { // intersects.length === 0
+      //   this.planesArray.forEach((plane) => { // 各planeを見る = intersects[0]と同じようにしている
+      //     // 位置を元に戻す
+      //     plane.position.copy(plane.defaultPos);
+      //   });
+      //   // ホバー時に中央非表示
+      //   document.querySelectorAll('.hov_cont').forEach(item => {
+      //     item.style.display = 'none';
+      //   });
+      //   flag = false;
+      // }
 
       // 元々の記述(勉強用)
       // if (intersects.length > 0) { // ぶつかったオブジェクトに対しての処理
@@ -334,7 +387,7 @@ class ThreeApp {
     /**
      * 板ポリゴン
      */
-
+    // 画像を貼り付けるplane
     this.group = new THREE.Group(); // 板ポリ全体をグループ化するため
     this.parentGroup = new THREE.Group(); // groupを包むgroup = マウスで傾きをつける groupはxで回転がかかっているので区別する
 
@@ -389,6 +442,37 @@ class ThreeApp {
       this.scene.add(this.parentGroup);
     }
 
+    // ホバー時反応用のplane
+    this.hoverPlaneGroup = new THREE.Group(); // ホバー時用のグループを作成
+    this.hoverParentGroup = new THREE.Group(); // マウスで傾きをつける用
+    const hoverPlaneGeometry = new THREE.PlaneGeometry(0.40, 0.30); // planeジオメトリを作成
+    this.hoverPlanesArray = []; // レイキャストに入れるための配列
+    for(let i = 0; i < numPlanes; i++){
+      const angle = i * (2 * Math.PI / numPlanes);
+      const x = radius * Math.cos(angle);
+      const y = radius * Math.sin(angle);
+
+      const hoverPlaneMaterial = new THREE.MeshBasicMaterial({
+        // color: 0xFF0000, // 確認用
+        colorWrite: false, // 深度値を無効にする
+        side: THREE.DoubleSide
+      });
+
+      this.hoverPlane = new THREE.Mesh(hoverPlaneGeometry, hoverPlaneMaterial); // メッシュ作成
+      this.hoverPlane.position.set(x, y, 0);
+      this.hoverPlane.rotation.x = Math.PI / 2;
+      this.hoverPlane.rotation.y = angle;
+      this.hoverPlaneGroup.add(this.hoverPlane);
+      // console.log(this.hoverPlane);
+      this.hoverPlanesArray.push(this.hoverPlane);
+      // console.log(this.hoverPlanesArray);
+
+      this.hoverPlaneGroup.rotation.x = Math.PI / 2 + 10;
+      this.hoverPlaneGroup.rotation.z = 15;
+      this.scene.add(this.hoverPlaneGroup);
+      this.hoverParentGroup.add(this.hoverPlaneGroup);
+      this.scene.add(this.hoverParentGroup);
+    }
 
     // マウスイベントで回転
     let mouseDownFlag = false; // マウスボタンが up or downのフラグ
@@ -396,23 +480,16 @@ class ThreeApp {
     this.windowHalfX = window.innerWidth / 2; // ウィンドウの中心
 
     this.wrapper.addEventListener('mousedown', (event) => { // マウスボタンが押された時
-
       mouseDownFlag = true;
-
       // マウスボタンが押された瞬間（mousedown）に、その時のカーソルの位置を変数に保持するようにする
       this.pointerStartX = event.clientX - this.windowHalfX; // ポインターが押された瞬間の位置を保存
-
-
     });
 
     this.wrapper.addEventListener('mouseup', () => { // マウスボタンが離された時
-
       mouseDownFlag = false;
-
     });
 
     this.wrapper.addEventListener('mousemove', (event) => { // マウスが動いた時
-
       // まずフラグが立っているかを見る（false なら即 return する）
       if(mouseDownFlag === false) return;
 
@@ -427,6 +504,7 @@ class ThreeApp {
 
         // 横方向の移動量を回転量に変換
         this.group.rotation.z += this.pointerDiffX * 0.01;
+        this.hoverPlaneGroup.rotation.z += this.pointerDiffX * 0.01;
       }
     });
   }
@@ -444,7 +522,6 @@ class ThreeApp {
 
     // レンダラーで描画
     this.renderer.render(this.scene, this.camera);
-
   }
 
 }
